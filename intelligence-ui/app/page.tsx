@@ -1,25 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState, ReactNode } from 'react';
-import { 
-  Zap, 
-  Target, 
-  Activity, 
-  Lock, 
-  ShieldCheck, 
-  Cpu, 
-  TrendingUp, 
-  Clock, 
-  Search,
-  CheckCircle2,
-  AlertCircle,
-  Command
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Brain,
+  CalendarDays,
+  Clock3,
+  Flame,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+  TriangleAlert,
 } from 'lucide-react';
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -28,11 +25,8 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Area,
-  AreaChart
 } from 'recharts';
 
-// --- Types ---
 type AnalyticsPayload = {
   today_snapshot: {
     total_deep_minutes: number;
@@ -53,20 +47,12 @@ type AnalyticsPayload = {
     top_productive_activity: string | null;
     top_waste_activity: string | null;
   };
-  weekly_trend: {
-    date: string;
-    avg_focus: number | null;
-    total_minutes: number;
-  }[];
+  weekly_trend: { date: string; avg_focus: number | null; total_minutes: number }[];
   focus_heatmap: {
     start_date: string;
     values: (number | null)[][];
   };
-  classification_totals: {
-    Productive: number;
-    Neutral: number;
-    Waste: number;
-  };
+  category_breakdown: { name: string; minutes: number }[];
   detailed_activity: {
     label: string;
     app: string;
@@ -75,485 +61,425 @@ type AnalyticsPayload = {
     sessions: number;
     last_seen: string;
   }[];
-  category_breakdown: {
-    name: string;
-    minutes: number;
-  }[];
   assistant_insights: string[];
   assistant_insights_source: string;
-  ml_phase1: {
-    feature_store: {
-      lookback_days: number;
-      row_count: number;
-      columns: string[];
-    };
-    probabilistic_forecast: {
-      timestamp: string;
-      hour: number;
-      p10: number;
-      p50: number;
-      p90: number;
-      confidence: number;
-    }[];
-    anomaly_detection: {
-      status: string;
-      risk_level?: string;
-      productive_z_score?: number;
-      waste_delta_pct?: number;
-      recent_avg_productive_minutes?: number;
-      baseline_avg_productive_minutes?: number;
-    };
-  };
-};
-
-type RegimePayload = {
-  regime_label: string;
-  regime_score: number;
-  details: {
-    baseline_productive_mean?: number;
-    recent_productive_mean?: number;
-    baseline_waste_mean?: number;
-    recent_waste_mean?: number;
-    change_score?: number;
-    avg_focus?: number;
-    days_observed?: number;
-  };
-};
-
-type ClassificationQualityPayload = {
-  status: string;
-  sample_size: number;
-  proxy_accuracy?: number;
-  avg_confidence?: number;
-  fallback_rate?: number;
-  class_distribution?: Record<string, number>;
 };
 
 type RankedSchedulePayload = {
-  model_type: string;
-  regime: string;
-  forecast_count: number;
   ranked_blocks: {
     start_time: string;
     end_time: string;
-    hour: number;
     tradeoff_score: number;
     confidence: number;
     suggested_task: string;
-    tradeoff: {
-      focus_gain: number;
-      consistency: number;
-      fatigue_cost: number;
-      waste_risk: number;
-    };
   }[];
-};
-
-type DecisionRecommendPayload = {
-  context: {
-    hour: number;
-    productive_minutes_recent: number;
-    waste_minutes_recent: number;
-    neutral_minutes_recent: number;
-    avg_focus_recent: number | null;
-    regime: string;
-  };
-  recommended_actions: {
-    action: string;
-    score: number;
-    predicted_uplift_pct: number;
-    sample_size: number;
-    why: string;
-  }[];
-};
-
-type DecisionUpliftPayload = {
-  status: string;
-  baseline_reward?: number;
-  action_uplift: {
-    action: string;
-    uplift_pct: number;
-    confidence: number;
-    treated_count: number;
-  }[];
-};
-
-type InfluenceGraphPayload = {
-  build_result: {
-    status: string;
-    edge_count: number;
-  } | null;
-  graph: {
-    status: string;
-    leverage_recommendations: {
-      anchor_activity: string;
-      influence_score: number;
-      likely_impacted_activities: string[];
-      recommendation: string;
-    }[];
-  };
 };
 
 type PrivacyStatusPayload = {
   local_only_training: boolean;
-  local_llm_endpoint: string;
-  cloud_training_enabled: boolean;
   note: string;
 };
 
-// --- Components ---
+type RegimePayload = { regime_label: string; regime_score: number };
+type QualityPayload = { proxy_accuracy?: number; avg_confidence?: number; fallback_rate?: number };
+type DecisionRecommendPayload = { recommended_actions: { action: string; predicted_uplift_pct: number }[] };
+type InfluenceGraphPayload = {
+  graph: { leverage_recommendations: { anchor_activity: string; recommendation: string }[] };
+};
 
-function GlassCard({ 
-  title, 
-  subtitle, 
-  children, 
-  className = "", 
-  icon: Icon 
-}: { 
-  title: string; 
-  subtitle?: string; 
-  children: ReactNode; 
-  className?: string; 
-  icon?: any 
-}) {
-  return (
-    <div className={`glass-pane rounded-3xl p-6 ${className}`}>
-      <div className="mb-5 flex items-start justify-between">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">{title}</h3>
-          {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
-        </div>
-        {Icon && (
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/50 text-slate-400 shadow-sm border border-slate-100">
-            <Icon className="h-5 w-5" />
-          </div>
-        )}
-      </div>
-      <div>{children}</div>
-    </div>
-  );
+const STATUS_COLORS: Record<'Productive' | 'Neutral' | 'Waste', string> = {
+  Productive: 'text-emerald-700 bg-emerald-100 border-emerald-200',
+  Neutral: 'text-sky-700 bg-sky-100 border-sky-200',
+  Waste: 'text-rose-700 bg-rose-100 border-rose-200',
+};
+
+function panelClass(extra = '') {
+  return `rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${extra}`;
 }
 
-function MetricTile({ label, value, subvalue, type = "blue" }: { label: string; value: string | number; subvalue?: string; type?: "blue" | "emerald" | "rose" | "violet" }) {
-  const colors = {
-    blue: "text-blue-600 bg-blue-50/50 border-blue-100",
-    emerald: "text-emerald-600 bg-emerald-50/50 border-emerald-100",
-    rose: "text-rose-600 bg-rose-50/50 border-rose-100",
-    violet: "text-violet-600 bg-violet-50/50 border-violet-100",
-  };
-
-  return (
-    <div className={`rounded-3xl border p-5 transition-all hover:scale-[1.02] ${colors[type]}`}>
-      <p className="text-[10px] font-bold uppercase tracking-[0.1em] opacity-80">{label}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
-      {subvalue && <p className="mt-1 text-xs font-medium opacity-70">{subvalue}</p>}
-    </div>
-  );
+function formatHourLabel(iso: string | null) {
+  if (!iso) return '--';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function SectionHeading({ title, icon: Icon }: { title: string; icon: any }) {
-  return (
-    <div className="mb-6 mt-12 flex items-center gap-2 border-b border-slate-100 pb-3">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
-        <Icon className="h-4 w-4" />
-      </div>
-      <h2 className="text-xl font-bold tracking-tight text-slate-900">{title}</h2>
-    </div>
-  );
+function formatTimeRange(start: string, end: string) {
+  const s = new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const e = new Date(end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${s} - ${e}`;
 }
 
-// --- Main View ---
+function heatColor(value: number | null) {
+  if (value === null) return 'bg-slate-100';
+  if (value >= 8) return 'bg-emerald-500';
+  if (value >= 6) return 'bg-emerald-400';
+  if (value >= 4) return 'bg-sky-400';
+  if (value >= 2) return 'bg-amber-300';
+  return 'bg-rose-300';
+}
 
-export default function ZenithDashboard() {
+export default function ZenithIntelligencePage() {
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<RankedSchedulePayload | null>(null);
+  const [privacy, setPrivacy] = useState<PrivacyStatusPayload | null>(null);
   const [regime, setRegime] = useState<RegimePayload | null>(null);
-  const [quality, setQuality] = useState<ClassificationQualityPayload | null>(null);
-  const [rankedSchedule, setRankedSchedule] = useState<RankedSchedulePayload | null>(null);
-  const [decisionRecommend, setDecisionRecommend] = useState<DecisionRecommendPayload | null>(null);
-  const [decisionUplift, setDecisionUplift] = useState<DecisionUpliftPayload | null>(null);
-  const [influenceGraph, setInfluenceGraph] = useState<InfluenceGraphPayload | null>(null);
-  const [privacyStatus, setPrivacyStatus] = useState<PrivacyStatusPayload | null>(null);
+  const [quality, setQuality] = useState<QualityPayload | null>(null);
+  const [decision, setDecision] = useState<DecisionRecommendPayload | null>(null);
+  const [graph, setGraph] = useState<InfluenceGraphPayload | null>(null);
   const [manualLog, setManualLog] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchJson = async <T,>(url: string): Promise<T | null> => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/analytics/');
-        if (!response.ok) throw new Error('API Sync failed');
-        const data = await response.json();
-        setAnalytics(data);
-        setAnalyticsError(null);
-      } catch (err) {
-        setAnalyticsError('Primary analytics sync offline.');
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return (await res.json()) as T;
+      } catch {
+        return null;
       }
     };
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // Poll every 60s
-    return () => clearInterval(interval);
-  }, []);
 
-  useEffect(() => {
-    const fetchAdvanced = async () => {
-      try {
-        const endpoints = [
-          'http://127.0.0.1:8000/api/analytics/regime/',
-          'http://127.0.0.1:8000/api/analytics/classification-quality/',
-          'http://127.0.0.1:8000/api/schedule/ranked/',
-          'http://127.0.0.1:8000/api/decision/recommend/',
-          'http://127.0.0.1:8000/api/decision/uplift/',
-          'http://127.0.0.1:8000/api/graph/influence/?rebuild=1',
-          'http://127.0.0.1:8000/api/privacy/status/'
-        ];
-        const res = await Promise.all(endpoints.map(e => fetch(e).then(r => r.ok ? r.json() : null)));
-        setRegime(res[0]);
-        setQuality(res[1]);
-        setRankedSchedule(res[2]);
-        setDecisionRecommend(res[3]);
-        setDecisionUplift(res[4]);
-        setInfluenceGraph(res[5]);
-        setPrivacyStatus(res[6]);
-      } catch (e) { console.error("Advanced fetch failed", e); }
+    const load = async () => {
+      setLoading(true);
+      const [analyticsRes, scheduleRes, privacyRes, regimeRes, qualityRes, decisionRes, graphRes] = await Promise.all([
+        fetchJson<AnalyticsPayload>('http://127.0.0.1:8000/api/analytics/'),
+        fetchJson<RankedSchedulePayload>('http://127.0.0.1:8000/api/schedule/ranked/'),
+        fetchJson<PrivacyStatusPayload>('http://127.0.0.1:8000/api/privacy/status/'),
+        fetchJson<RegimePayload>('http://127.0.0.1:8000/api/analytics/regime/'),
+        fetchJson<QualityPayload>('http://127.0.0.1:8000/api/analytics/classification-quality/'),
+        fetchJson<DecisionRecommendPayload>('http://127.0.0.1:8000/api/decision/recommend/'),
+        fetchJson<InfluenceGraphPayload>('http://127.0.0.1:8000/api/graph/influence/?rebuild=0'),
+      ]);
+      setAnalytics(analyticsRes);
+      setSchedule(scheduleRes);
+      setPrivacy(privacyRes);
+      setRegime(regimeRes);
+      setQuality(qualityRes);
+      setDecision(decisionRes);
+      setGraph(graphRes);
+      setLoading(false);
     };
-    fetchAdvanced();
+
+    void load();
   }, []);
 
-  const averageFocus = useMemo(() => {
-    const values = (analytics?.weekly_trend ?? []).map(v => v.avg_focus).filter((v): v is number => v !== null);
-    return values.length ? (values.reduce((s,v) => s+v, 0) / values.length).toFixed(1) : "0";
+  const totalFocusBlocks = useMemo(() => {
+    if (!analytics?.focus_heatmap?.values) return 0;
+    let count = 0;
+    for (const row of analytics.focus_heatmap.values) {
+      for (const cell of row) {
+        if (cell !== null) count += 1;
+      }
+    }
+    return count;
   }, [analytics]);
 
-  const handleManualSubmit = async (e: any) => {
+  const submitManualLog = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!manualLog.trim()) return;
-    setIsSubmitting(true);
+    setSubmitting(true);
     try {
       await fetch('http://127.0.0.1:8000/ingest/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: 'Manual Entry', duration_minutes: 60, metadata: { raw_text: manualLog } }),
+        body: JSON.stringify({
+          event_type: 'Manual Entry',
+          duration_minutes: 30,
+          metadata: { raw_text: manualLog },
+        }),
       });
       setManualLog('');
-    } finally { setIsSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-50 text-slate-900">
+        <div className="mx-auto max-w-7xl px-6 py-12">Loading Zenith Intelligence...</div>
+      </main>
+    );
+  }
+
   return (
-    <div className="min-h-screen px-6 py-10 lg:px-12">
-      {/* --- Global Header --- */}
-      <header className="mb-12 flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
-        <div>
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
-              <Command className="h-6 w-6" />
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-slate-900 p-3 text-white">
+              <Brain className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-400">Personal Strategic Intelligence</p>
-              <h1 className="text-4xl font-black tracking-tight text-slate-900">ZENITH <span className="text-emerald-500">I.E.</span></h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Personal Analytics Command Center</p>
+              <h1 className="text-3xl font-semibold tracking-tight">Zenith Intelligence</h1>
             </div>
           </div>
-          <p className="max-w-2xl text-lg font-medium text-slate-500">
-            Cognitive optimization active. Analyzing neural behavior patterns in <span className="text-slate-900">real-time</span>.
-          </p>
-        </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              {privacy?.local_only_training ? 'Local-only mode' : 'Cloud assisted mode'}
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-600">
+              <Sparkles className="h-4 w-4 text-violet-600" />
+              Regime: {regime?.regime_label ?? 'unknown'}
+            </span>
+          </div>
+        </header>
 
-        <div className="flex gap-4">
-          <div className="glass-pane rounded-3xl px-6 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">System Accuracy</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{quality?.proxy_accuracy ? `${(quality.proxy_accuracy * 100).toFixed(0)}%` : "--"}</p>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Deep Work</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-700">{analytics?.today_analysis.productive_minutes ?? 0}m</p>
           </div>
-          <div className="glass-pane rounded-3xl px-6 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Volume</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{analytics?.week_analysis.total_minutes ?? 0}m</p>
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Waste</p>
+            <p className="mt-2 text-2xl font-semibold text-rose-700">{analytics?.today_analysis.waste_minutes ?? 0}m</p>
           </div>
-          <div className="glass-pane rounded-3xl border-emerald-100 bg-emerald-50/40 px-6 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Avg Performance</p>
-            <p className="mt-1 text-2xl font-bold text-emerald-700">{averageFocus}</p>
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Neutral</p>
+            <p className="mt-2 text-2xl font-semibold text-sky-700">{analytics?.today_analysis.neutral_minutes ?? 0}m</p>
           </div>
-        </div>
-      </header>
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Avg Focus</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{analytics?.today_analysis.avg_focus_score ?? '--'}</p>
+          </div>
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Best Hour</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatHourLabel(analytics?.today_snapshot.best_focus_hour ?? null)}</p>
+          </div>
+          <div className={panelClass()}>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Streak</p>
+            <p className="mt-2 text-2xl font-semibold text-amber-700">{analytics?.today_snapshot.current_streak ?? 0} days</p>
+          </div>
+        </section>
 
-      {analyticsError && (
-        <div className="mb-8 flex items-center gap-3 rounded-2xl border border-rose-100 bg-rose-50/50 p-4 text-sm font-medium text-rose-600">
-          <AlertCircle className="h-4 w-4" /> {analyticsError}
-        </div>
-      )}
-
-      {/* --- Primary Metrics Grid --- */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <GlassCard title="Real-time Pulse" subtitle="Current session metrics" icon={Activity} className="animate-in">
-          <div className="grid grid-cols-2 gap-4">
-            <MetricTile label="Productive" value={`${analytics?.today_analysis.productive_minutes ?? 0}m`} type="emerald" />
-            <MetricTile label="Waste" value={`${analytics?.today_analysis.waste_minutes ?? 0}m`} type="rose" />
-            <MetricTile label="Neutral" value={`${analytics?.today_analysis.neutral_minutes ?? 0}m`} type="blue" />
-            <MetricTile label="Avg Focus" value={analytics?.today_analysis.avg_focus_score ?? "--"} type="violet" />
-          </div>
-          <div className="mt-6 rounded-2xl bg-white/50 p-4 text-xs font-medium text-slate-500 border border-slate-100">
-             Top efficiency drain: <span className="text-slate-900 italic">"{analytics?.today_analysis.top_waste_activity ?? 'none identified'}"</span>
-          </div>
-        </GlassCard>
-
-        <GlassCard title="Strategic Forecast" subtitle="24hr Probabilistic Model" icon={Target} className="animate-in [animation-delay:0.1s]">
-          <div className="h-48 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analytics?.ml_phase1.probabilistic_forecast ?? []}>
-                <defs>
-                   <linearGradient id="colorFocus" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                   </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                <YAxis hide domain={[0, 10]} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '12px' }} 
-                  itemStyle={{ fontWeight: 'bold' }}
-                />
-                <Area type="monotone" dataKey="p50" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorFocus)" />
-                <Area type="monotone" dataKey="p90" stroke="#10b981" strokeWidth={0} fillOpacity={0.05} fill="#10b981" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Confidence Interval: High</p>
-        </GlassCard>
-
-        <GlassCard title="Trajectory" subtitle="Weekly Performance Trend" icon={TrendingUp} className="animate-in [animation-delay:0.2s]">
-          <div className="h-48 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={analytics?.weekly_trend ?? []}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                <YAxis hide />
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', fontSize: '11px' }} />
-                <Line type="monotone" dataKey="avg_focus" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        <GlassCard title="Neural Split" subtitle="Composition of focus" icon={Search} className="animate-in [animation-delay:0.3s]">
-           <div className="h-48 pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={analytics?.category_breakdown ?? []}
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="minutes"
-                >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#3b82f6" />
-                  <Cell fill="#f43f5e" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* --- Strategic Command Row --- */}
-      <SectionHeading title="Strategic Control" icon={Zap} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <GlassCard title="LLM Strategic Intel" subtitle={`Source: Local ${analytics?.assistant_insights_source ?? 'Model'}`} icon={Cpu}>
-          <div className="space-y-4">
-            {(analytics?.assistant_insights ?? []).map((msg, i) => (
-              <div key={i} className="flex gap-3 animate-in" style={{ animationDelay: `${i * 0.15}s` }}>
-                <div className="mt-1 h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-                <p className="text-sm font-medium leading-relaxed text-slate-700">{msg}</p>
+        <section className="grid gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
+            <div className={panelClass()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Weekly Trend</h2>
+                <span className="text-sm text-slate-500">Focus score + total minutes</span>
               </div>
-            ))}
-          </div>
-        </GlassCard>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics?.weekly_trend ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis yAxisId="left" tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar yAxisId="right" dataKey="total_minutes" fill="#cbd5e1" name="Minutes" radius={[6, 6, 0, 0]} />
+                    <Line yAxisId="left" type="monotone" dataKey="avg_focus" stroke="#0f766e" strokeWidth={2.5} dot={{ r: 3 }} name="Avg Focus" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
 
-        <GlassCard title="Optimal Routine Slots" subtitle="Bayesian Schedule Ranking" icon={Clock}>
-          <div className="space-y-3">
-            {(rankedSchedule?.ranked_blocks ?? []).slice(0, 4).map((block, i) => (
-              <div key={i} className="group relative rounded-2xl border border-slate-100 bg-white/40 p-3 transition-colors hover:bg-white hover:border-emerald-200">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-800 tracking-tight">
-                    {new Date(block.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — Peak State
-                  </p>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">SCR: {block.tradeoff_score}</span>
+            <div className={panelClass()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Focus Heatmap</h2>
+                <span className="text-sm text-slate-500">Last 7 days x 24 hours</span>
+              </div>
+              <div className="overflow-x-auto">
+                <div className="min-w-[720px] space-y-2">
+                  {(analytics?.focus_heatmap.values ?? []).map((row, rowIdx) => (
+                    <div key={rowIdx} className="grid grid-cols-24 gap-1">
+                      {row.map((cell, colIdx) => (
+                        <div
+                          key={`${rowIdx}-${colIdx}`}
+                          className={`h-4 rounded ${heatColor(cell)}`}
+                          title={`Day ${rowIdx + 1}, hour ${colIdx}: ${cell ?? 'no data'}`}
+                        />
+                      ))}
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-1 text-xs font-medium text-emerald-600">{block.suggested_task}</p>
               </div>
-            ))}
-          </div>
-        </GlassCard>
-
-        <GlassCard title="Manual Neural Sync" subtitle="Subjective event overwrite" icon={Lock}>
-          <form onSubmit={handleManualSubmit} className="space-y-3">
-             <textarea
-              value={manualLog}
-              onChange={(e) => setManualLog(e.target.value)}
-              placeholder="Inject subjective performance data... (e.g. 'Highly focused coding 60m')"
-              className="min-h-[100px] w-full rounded-2xl border border-slate-200 bg-white/30 p-4 text-sm outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:ring-4 focus:ring-slate-50"
-            />
-            <button
-              disabled={isSubmitting}
-              type="submit"
-              className="w-full rounded-2xl bg-slate-900 py-4 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50 active:scale-[0.98]"
-            >
-              {isSubmitting ? "Processing Signal..." : "Sync Signal to Brain"}
-            </button>
-          </form>
-        </GlassCard>
-      </div>
-
-      {/* --- System Health & Logic Row --- */}
-      <SectionHeading title="Performance Logic" icon={ShieldCheck} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <GlassCard title="Behavioral Regime">
-           <div className="flex flex-col items-center justify-center py-4 text-center">
-              <span className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Current Phase</span>
-              <p className="text-3xl font-black text-slate-900">{regime?.regime_label ?? "Calibrating..."}</p>
-              <div className="mt-4 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(regime?.regime_score ?? 0) * 10}%` }} />
-              </div>
-           </div>
-        </GlassCard>
-
-        <GlassCard title="Policy Analysis">
-           <div className="space-y-3">
-             {(decisionRecommend?.recommended_actions ?? []).slice(0, 2).map((a, i) => (
-               <div key={i} className="rounded-xl bg-violet-50/50 p-3 border border-violet-100">
-                 <p className="text-xs font-bold text-violet-700">{a.action}</p>
-                 <p className="mt-0.5 text-[10px] font-medium text-violet-500">Exp. Uplift: +{a.predicted_uplift_pct}%</p>
-               </div>
-             ))}
-           </div>
-        </GlassCard>
-
-        <GlassCard title="Privacy Protocol">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-              <ShieldCheck className="h-4 w-4" /> LOCAL-ONLY ENGINE
+              <p className="mt-3 text-sm text-slate-500">Populated focus cells: {totalFocusBlocks}</p>
             </div>
-            <p className="text-xs font-medium leading-relaxed text-slate-500">
-              Inference endpoint: <code className="text-[10px] text-slate-900">{privacyStatus?.local_llm_endpoint ?? "127.0.0.1:11434"}</code>. 
-              Zero persistent cloud outbound signals detected.
-            </p>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Detailed Activity Log</h2>
+              <div className="max-h-80 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="text-left text-slate-500">
+                      <th className="py-2">Activity</th>
+                      <th className="py-2">Type</th>
+                      <th className="py-2 text-right">Sessions</th>
+                      <th className="py-2 text-right">Minutes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(analytics?.detailed_activity ?? []).map((item, idx) => (
+                      <tr key={`${item.label}-${idx}`} className="border-t border-slate-100">
+                        <td className="py-2">
+                          <p className="font-medium text-slate-900">{item.label}</p>
+                          <p className="text-xs text-slate-500">{item.app}</p>
+                        </td>
+                        <td className="py-2">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[item.classification]}`}>
+                            {item.classification}
+                          </span>
+                        </td>
+                        <td className="py-2 text-right">{item.sessions}</td>
+                        <td className="py-2 text-right font-medium">{item.minutes}m</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </GlassCard>
 
-        <GlassCard title="Activity Graph">
-           <div className="space-y-2">
-             <p className="text-xs font-bold text-slate-400 uppercase">Anchor Points</p>
-             {(influenceGraph?.graph?.leverage_recommendations ?? []).slice(0, 2).map((l, i) => (
-               <div key={i} className="rounded-xl border border-slate-100 p-2 text-[10px] font-medium text-slate-600">
-                 <span className="text-slate-900 font-bold">{l.anchor_activity}:</span> {l.recommendation}
-               </div>
-             ))}
-           </div>
-        </GlassCard>
+          <aside className="space-y-6 lg:col-span-4">
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Category Breakdown</h2>
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={analytics?.category_breakdown ?? []} dataKey="minutes" nameKey="name" innerRadius={50} outerRadius={88}>
+                      {(analytics?.category_breakdown ?? []).map((entry, index) => {
+                        const normalized = entry.name.toLowerCase();
+                        const fill = normalized.includes('waste')
+                          ? '#fb7185'
+                          : normalized.includes('productive')
+                            ? '#10b981'
+                            : '#38bdf8';
+                        return <Cell key={index} fill={fill} />;
+                      })}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Assistant Insights</h2>
+              <ul className="space-y-3 text-sm text-slate-700">
+                {(analytics?.assistant_insights ?? ['Not enough data yet.']).map((insight, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <TrendingUp className="mt-0.5 h-4 w-4 text-slate-400" />
+                    <span>{insight}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-xs text-slate-500">Source: {analytics?.assistant_insights_source ?? 'rule-based fallback'}</p>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Model Diagnostics</h2>
+              <div className="space-y-3 text-sm text-slate-700">
+                <p>Classifier accuracy: {((quality?.proxy_accuracy ?? 0) * 100).toFixed(1)}%</p>
+                <p>Avg confidence: {((quality?.avg_confidence ?? 0) * 100).toFixed(1)}%</p>
+                <p>Fallback rate: {((quality?.fallback_rate ?? 0) * 100).toFixed(1)}%</p>
+                <p>Regime score: {((regime?.regime_score ?? 0) * 100).toFixed(0)}%</p>
+              </div>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Recommended Blocks</h2>
+              <div className="space-y-2">
+                {(schedule?.ranked_blocks ?? []).slice(0, 3).map((block, idx) => (
+                  <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{formatTimeRange(block.start_time, block.end_time)}</p>
+                    <p className="mt-1 font-medium text-slate-900">{block.suggested_task}</p>
+                    <p className="mt-1 text-xs text-slate-500">Confidence {(block.confidence * 100).toFixed(0)}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Interventions</h2>
+              <div className="space-y-2 text-sm text-slate-700">
+                {(decision?.recommended_actions ?? []).slice(0, 3).map((rec, idx) => (
+                  <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="font-medium capitalize">{rec.action.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-slate-500">Expected uplift: +{rec.predicted_uplift_pct}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-4 text-lg font-semibold">Habit Influence</h2>
+              <div className="space-y-2 text-sm text-slate-700">
+                {(graph?.graph.leverage_recommendations ?? []).slice(0, 3).map((row, idx) => (
+                  <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="font-medium">{row.anchor_activity}</p>
+                    <p className="text-xs text-slate-500">{row.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={panelClass()}>
+              <h2 className="mb-3 text-lg font-semibold">Manual Context Log</h2>
+              <p className="mb-3 text-sm text-slate-600">Add notes to improve assistant recommendations.</p>
+              <form className="space-y-3" onSubmit={submitManualLog}>
+                <input
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                  placeholder="Example: YouTube DSA lecture, focus 7"
+                  value={manualLog}
+                  onChange={(e) => setManualLog(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {submitting ? 'Saving...' : 'Save to Zenith Intelligence'}
+                </button>
+              </form>
+            </div>
+
+            <div className={panelClass('border-amber-200 bg-amber-50')}>
+              <p className="flex items-start gap-2 text-sm text-amber-900">
+                <TriangleAlert className="mt-0.5 h-4 w-4" />
+                Productive is green, waste is red, and neutral is blue in the activity log.
+              </p>
+            </div>
+          </aside>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className={panelClass()}>
+            <p className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <Target className="h-4 w-4" /> Top Productive Driver
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">{analytics?.week_analysis.top_productive_activity ?? 'No data'}</p>
+          </div>
+          <div className={panelClass()}>
+            <p className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <TriangleAlert className="h-4 w-4" /> Top Distraction Driver
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">{analytics?.week_analysis.top_waste_activity ?? 'No data'}</p>
+          </div>
+          <div className={panelClass()}>
+            <p className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <CalendarDays className="h-4 w-4" /> Weekly Minutes
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">{analytics?.week_analysis.total_minutes ?? 0} minutes tracked</p>
+          </div>
+        </section>
+
+        <section className={panelClass('flex flex-wrap items-center gap-4')}>
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+            <Flame className="h-3.5 w-3.5" /> Productive
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800">
+            <TriangleAlert className="h-3.5 w-3.5" /> Waste
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-800">
+            <Clock3 className="h-3.5 w-3.5" /> Neutral
+          </span>
+        </section>
       </div>
-
-      <footer className="mt-20 border-t border-slate-100 pt-8 pb-12 text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-300">ZENITH INTELLIGENCE • RELEASE 1.0.0</p>
-      </footer>
-    </div>
+    </main>
   );
 }
