@@ -1,13 +1,13 @@
-# Zenith Intelligence — Personal Strategic OS
+# FocusOS — Personal Intelligence Engine
 
-> *An AI-native, privacy-first cognitive optimization system that observes your behavior, learns your performance cycles, and scales your output — without sending a single byte to the cloud.*
+> *An AI-native, privacy-first productivity system that observes your computer behaviour, learns your cognitive patterns, and tells you exactly when and what to work on next — without sending a single byte to the cloud.*
 
 ---
 
 ## Why This Is Not a To-Do App
 
 A to-do app asks you to remember what you need to do.  
-**Zenith Intelligence watches what you actually do, builds a machine learning model of your behavior, and proactively scales your performance.**
+**FocusOS watches what you actually do, builds a machine learning model of your behaviour, and proactively coaches you.**
 
 | Feature | Typical To-Do App | FocusOS |
 |---|---|---|
