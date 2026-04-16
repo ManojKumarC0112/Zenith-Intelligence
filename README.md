@@ -1,4 +1,4 @@
-# FocusOS — Personal Intelligence Engine
+# Zenith-Intelligence — Personal Intelligence Engine
 
 > *An AI-native, privacy-first productivity system that observes your computer behaviour, learns your cognitive patterns, and tells you exactly when and what to work on next — without sending a single byte to the cloud.*
 
@@ -7,7 +7,7 @@
 ## Why This Is Not a To-Do App
 
 A to-do app asks you to remember what you need to do.  
-**FocusOS watches what you actually do, builds a machine learning model of your behaviour, and proactively coaches you.**
+**Zenith-Intelligence watches what you actually do, builds a machine learning model of your behaviour, and proactively coaches you.**
 
 | Feature | Typical To-Do App | FocusOS |
 |---|---|---|
@@ -22,7 +22,7 @@ A to-do app asks you to remember what you need to do.
 
 ## What It Does
 
-FocusOS runs two persistent background processes:
+Zenith-Intelligence runs two persistent background processes:
 
 1. **Silent Observer** (`observer_daemon.py`) — Polls the active window title every 60 seconds, classifies the activity (Productive / Neutral / Waste), accumulates duration, and streams the event to the Django API. Offline resilience: events are buffered locally and flushed automatically when the server reconnects.
 
